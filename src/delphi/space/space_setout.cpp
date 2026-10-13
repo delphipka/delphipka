@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 //#define DEBUG_DELPHI_SPACE
 
 #include "../interface/environment.h"

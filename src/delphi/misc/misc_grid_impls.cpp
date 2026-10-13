@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 /**
  * @file misc_grid_impls.h
  * @brief concrete implementations of template member functions used for grids

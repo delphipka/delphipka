@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #include "../delphi/delphi_data.h"
 #include "../space/space.h"
 #include "../solver/solver_fastSOR.h"
@@ -127,14 +129,14 @@ void runDelphi(shared_ptr<SPrime> param)
             
             if (param->bndcon == 3) {
                 
-               pSolver->getPRIME(param);
+                pSolver->getPRIME(param);
 
             }
             
             pSolver->run();
             
             pSolver.reset();
- 
+
 //            pDataContainer->showMap("showmap_afteritr.dat");
             
             //********************************************************************************//
@@ -194,7 +196,7 @@ void runDelphi(shared_ptr<SPrime> param)
             
             /*
              * equivalent to out(frc,file="filename") in the parameter file
-             
+            
             if (0 == pSite->prime_grdphiv.size())
             {
                 pSite.reset();

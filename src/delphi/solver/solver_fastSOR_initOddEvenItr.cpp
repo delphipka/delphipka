@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: clears its push_back vectors so that it can be called twice (relaxation estimate, then the solve). phimap1/phimap2 are filled in bulk.
+
 /*
  * solver_fastSOR_initOddEvenItr.cpp
  *
@@ -12,6 +15,15 @@ void CDelphiFastSOR::initOddEvenItr(const int& forWhom)
    int ix,iy,iz;
    delphi_integer ip,iq;
    delphi_integer iadd1,iadd2,itemp1,itemp2,star,fin;
+
+   /*
+    * everything below is filled with push_back, so start empty: calculateRelaxFactor() and itit() each call this
+    * routine, and without the clear the second call appended to the first one's data and the solver iterated on it
+    */
+   ibndx.clear(); ibndy.clear(); ibndz.clear();
+   phimap1.clear(); phimap2.clear();
+   bndx1.clear(); bndx2.clear(); bndx3.clear(); bndx4.clear();
+
 
    /*
     * setup periodic boundaries
@@ -80,19 +92,15 @@ void CDelphiFastSOR::initOddEvenItr(const int& forWhom)
     * split prgfPhiMap to odd and even vectors
     */
     //cout << "ip,iq: " << ip << " " << iq <<endl;
-   for (ip = 0; ip < iHalfGridNum; ip++)
+   phimap1.resize(iHalfGridNum); phimap2.resize(iHalfGridNum);   // bulk fill, same values as the push_back loop it replaces
    {
-      iq = ip*2;
-        //cout << "ip,iq: " << ip << " " << iq <<endl;
-      if (prgfPhiMap.size() > iq)
-         phimap1.push_back(prgfPhiMap[iq]);
-      else
-         phimap1.push_back(0.0);
-
-      if (prgfPhiMap.size() > iq+1)
-         phimap2.push_back(prgfPhiMap[iq+1]);
-      else
-         phimap2.push_back(0.0);
+      const size_t nPhi = prgfPhiMap.size();
+      for (ip = 0; ip < iHalfGridNum; ip++)
+      {
+         iq = ip*2;
+         phimap1[ip] = (nPhi > (size_t)iq)     ? prgfPhiMap[iq]   : (delphi_real)0.0;
+         phimap2[ip] = (nPhi > (size_t)iq + 1) ? prgfPhiMap[iq+1] : (delphi_real)0.0;
+      }
    }
 
     //for (int ii=1;ii<=phimap2.size();ii++)

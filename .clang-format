@@ -1,0 +1,22 @@
+# Style of the C/C++ sources: 4 spaces, no tabs, Allman braces (what most of the code already uses).
+# It is chosen to change indentation and whitespace and as little else as possible: no reflow (ColumnLimit 0),
+# no include sorting (the order matters in this code base), comments are not rewrapped.
+# Format with:  python scripts/format.py     check with:  python scripts/format.py --check
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 0
+BreakBeforeBraces: Allman
+AccessModifierOffset: -4
+PointerAlignment: Left
+SortIncludes: Never
+ReflowComments: false
+MaxEmptyLinesToKeep: 2
+LineEnding: DeriveLF
+SpaceBeforeParens: ControlStatements
+AllowShortBlocksOnASingleLine: Always
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortCaseLabelsOnASingleLine: true

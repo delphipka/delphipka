@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: returns the spectral radius (was always 0.0) and uses the analytic Gauss-Seidel radius for Dirichlet boundaries. The Dirichlet case returns at once (no estimator sweep).
+
 /*
  * solver_fastSOR_relfac.cpp
  *
@@ -10,6 +13,15 @@
 delphi_real CDelphiFastSOR::calculateRelaxFactor()
 {
    delphi_real fRelaxFactor = 0.0;
+
+   //----- Dirichlet boundaries: the radius is known exactly (see the end of this function), so skip the one-sweep estimator,
+   //      which needed a whole initOddEvenItr() and a sweep per solve and was overwritten anyway.
+   if (!rgbPeriodicBndy[0] && !rgbPeriodicBndy[1] && !rgbPeriodicBndy[2])
+   {
+      const delphi_real fCos0 = cos(fPi/(iGrid-1));
+      fSpec = fCos0*fCos0;
+      return fSpec;
+   }
 
    int ix,iy,iz;
    delphi_integer iw;
@@ -94,5 +106,16 @@ delphi_real CDelphiFastSOR::calculateRelaxFactor()
 
    prgfPhiMap.assign(iGrid*iGrid*iGrid,0.0); // restore prgfPhiMap
 
+   //----- For Dirichlet boundaries the Gauss-Seidel spectral radius of the 7-point operator on an N^3 grid is
+   //      cos^2(pi/(N-1)) (the square of the Jacobi radius; a variable dielectric or salt only lowers it a little).
+   //      The one-sweep estimate above is too low (about 0.99 for N = 65) and left the SOR under-relaxed.
+   if (!rgbPeriodicBndy[0] && !rgbPeriodicBndy[1] && !rgbPeriodicBndy[2])
+   {
+      const delphi_real fCos = cos(fPi/(iGrid-1));
+      fSpec = fCos*fCos;
+   }
+
+   //----- the function used to return its local fRelaxFactor = 0.0, which the caller stored in fSpec
+   fRelaxFactor = fSpec;
    return fRelaxFactor;
 }

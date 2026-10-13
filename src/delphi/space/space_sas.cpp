@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #include "../interface/environment.h"
 #include "../delphi/delphi_constants.h"
 #include "../misc/misc_grid.h"

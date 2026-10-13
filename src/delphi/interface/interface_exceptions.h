@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 /**
  * @file interface_exceptions.h
  * @brief warnings/exceptions occurring in interface classes

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 //
 //  titration2.h
 //  DelPhiPKA

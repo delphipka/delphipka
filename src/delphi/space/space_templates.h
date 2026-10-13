@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #ifndef SPACE_TEMPLATES_H
 #define SPACE_TEMPLATES_H
 

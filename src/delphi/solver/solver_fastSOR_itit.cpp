@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: iteration cap (needed in single precision); optional GPU loop; several half sweeps per pass over the grid (solver_fastSOR_tblock.cpp).
+
 /*
  * solver_fastSOR_itit.cpp
  *
@@ -6,6 +9,7 @@
  */
 
 #include "solver_fastSOR.h"
+#include <algorithm>
 
 void CDelphiFastSOR::itit()
 {
@@ -116,8 +120,19 @@ void CDelphiFastSOR::itit()
         //}
     itr = 1;
     ires = 0;
+    if (gpuItit(maxres, itr)) goto itit_gpu_done;   // whole loop done on the GPU
+    tbPrepare();
     do
     {
+        {   // iterations that the convergence test does not look at: several half sweeps per pass over the grid
+            const int b = tbIterations(itr, std::min((int)iLinIterateNum, (int)delphi::DELPHI_MAX_ITERATIONS));
+            if (b > 0)
+            {
+                tbHalfSweeps(2*b);
+                itr += b;
+                continue;
+            }
+        }
             //cout    << " LinLi: 7,7,7; igrid-1,7,7 : " << scientific << prgfPhiMap[(7-1)*iGrid*iGrid+(7-1)*iGrid+7-1] << "   "
             //<< prgfPhiMap[(7-1-1)*iGrid*iGrid+(7-1)*iGrid+(iGrid-1)] << endl;
 
@@ -258,6 +273,8 @@ void CDelphiFastSOR::itit()
          */
         if (iIterateInterval-1 == itr%iIterateInterval) // itr = 9,19,29,...
         {
+            if (1 == iConvergeFract) std::copy(phimap2.begin()+1, phimap2.begin()+iHalfGridNum, prgfPhiMap.begin()+1);  // plain copy: vectorised
+            else
             for (ix = 1; ix < iHalfGridNum; ix += iConvergeFract)
             {
                 prgfPhiMap[ix] = phimap2[ix];
@@ -299,6 +316,22 @@ void CDelphiFastSOR::itit()
         {
             delphi_real rnorm2=0.0, temp2;
 
+            if (1 == iConvergeFract)
+            {
+               // the two reductions (sum of squares, max) are what keep this loop scalar; accumulate them in double with omp simd
+               const delphi_real * __restrict pOld = prgfPhiMap.data();
+               const delphi_real * __restrict pNew = phimap2.data();
+               double sumsq = 0.0, maxch = (double)rmxch;
+               #pragma omp simd reduction(+:sumsq) reduction(max:maxch)
+               for (delphi_integer jx = 1; jx < iHalfGridNum; jx++)
+               {
+                  const double d = (double)pOld[jx] - (double)pNew[jx];
+                  sumsq += d*d;
+                  maxch  = (d < 0.0 ? -d : d) > maxch ? (d < 0.0 ? -d : d) : maxch;
+               }
+               rnorm2 = (delphi_real)sumsq; rmxch = (delphi_real)maxch;
+            }
+            else
             for (ix = 1; ix < iHalfGridNum; ix += iConvergeFract)
             {
                 temp2   = prgfPhiMap[ix] - phimap2[ix];
@@ -351,6 +384,12 @@ void CDelphiFastSOR::itit()
 
         itr++;
 
+        if (itr > delphi::DELPHI_MAX_ITERATIONS)
+        {
+            cerr << " WARNING: SOR stopped after " << delphi::DELPHI_MAX_ITERATIONS << " iterations without reaching the convergence threshold." << endl;
+            break;
+        }
+
         /*
          * check to see if accuracy is sufficient
          */
@@ -372,6 +411,7 @@ void CDelphiFastSOR::itit()
     }
     while(true);
 
+itit_gpu_done:
     postItr(rmaxl,rmsl);
 
     /*

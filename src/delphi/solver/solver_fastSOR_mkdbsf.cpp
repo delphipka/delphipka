@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: setDielecBndySaltMap: splice the even rows in once instead of inserting each into the middle of three vectors (O(n^2)).
+
 /**
  * In:
  *    delphi_integer ibnum = iBndyGridNum;
@@ -118,11 +121,12 @@ void CDelphiFastSOR::setDielecBndySaltMap()
     delphi_integer iw;
 
     //------ Due to the nature of vector in C++, realignment of idpos, db, sf1 and sf2 is unnecessary.
-    vector<delphi_integer>::iterator idposEven = idpos.end();
-    vector< vector<delphi_real> >::iterator dbEven = db.end();
-
-
-    vector<delphi_integer>::iterator iepsvEven = iepsv.end();
+    // The even-indexed rows are collected here and spliced in at icount2a once after the loop;
+    // inserting each one into the middle of idpos/iepsv/db shifted the whole tail every time.
+    const delphi_integer iEvenStart = icount2a;
+    vector<delphi_integer> idposEven;
+    vector<delphi_integer> iepsvEven;
+    vector< vector<delphi_real> > dbEven;
 
     string strDbFile = "db.dat"; // db file name
     ofstream ofDbFileStream;
@@ -283,16 +287,9 @@ void CDelphiFastSOR::setDielecBndySaltMap()
 
         if (0 == iw%2) // iw is even
         {
-            idposEven = idpos.begin() + icount2a;
-            idposEven = idpos.insert(idposEven,iw/2+1);
-
-            iepsvEven = iepsv.begin() + icount2a;
-            iepsvEven = iepsv.insert(iepsvEven,ieps);
-            iepsvEven++;
-
-            dbEven    = db.begin() + icount2a;
-            dbEven    = db.insert(dbEven,dbrow);
-            dbEven++;
+            idposEven.push_back( iw/2+1 );
+            iepsvEven.push_back(ieps);
+            dbEven.push_back(dbrow);
 
             icount2a += 1;
         }
@@ -322,6 +319,11 @@ void CDelphiFastSOR::setDielecBndySaltMap()
     } //---------- end of for (delphi_integer ix = 0; ix < iBndyGridNum; ix += 1)
 
     if (bDbOut) ofDbFileStream.close();
+
+    // Splice the even rows in front of the odd ones (same order as the old per-row insert).
+    idpos.insert(idpos.begin() + iEvenStart, idposEven.begin(), idposEven.end());
+    iepsv.insert(iepsv.begin() + iEvenStart, iepsvEven.begin(), iepsvEven.end());
+    db.insert(db.begin() + iEvenStart, dbEven.begin(), dbEven.end());
 
 #ifdef VERBOSE
     cout << "no. dielectric boundary points in salt = " << idbs << endl;

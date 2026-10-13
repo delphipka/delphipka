@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: single precision is the default; limits for it.
+
 /**
  * @file environment.h
  * @brief pre-processor marco's used for compiling the code
@@ -15,7 +18,9 @@
  * - DP -- double      & long int [double precision]
  * - LD -- long double & long int [extreme case,rarely used]
  */
-#define MX
+#if !defined(SP) && !defined(MX) && !defined(DP) && !defined(LD)
+#define SP   // default: single precision (build with  make EXTRA=-DMX  for double reals, as before)
+#endif
 
 /**
  * flag for additional outputs at run time
@@ -49,6 +54,18 @@
 
 namespace delphi
 {
+/**
+ * Limits that keep a single-precision run finite: a float potential cannot get its per-iteration change below about
+ * 5e-5 kT/e (1BNA; more for larger potentials), so MAXC is raised to at least DELPHI_MIN_MAXC, and the SOR loop stops
+ * after DELPHI_MAX_ITERATIONS (normal runs need 50-1100) with a warning instead of iterating forever.
+ */
+#ifdef SP
+const float DELPHI_MIN_MAXC = 1.0e-4f;
+#else
+const float DELPHI_MIN_MAXC = 0.0f;
+#endif
+const int DELPHI_MAX_ITERATIONS = 20000;
+
 #ifdef SP
 typedef int   delphi_integer;
 typedef float delphi_real;

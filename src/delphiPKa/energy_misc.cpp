@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: base grid scale option SCALE0; the focusing chain is 2 then 4 for any base scale.
+
 //
 //  energy_misc.cpp
 //  DelPhiPKA
@@ -334,11 +337,11 @@ bool CEnergy::runFocus(shared_ptr<SPrime> param, SGrid<double>& center1)
     
     if (param->scale == 4)  return false;
     
-    param->scale *= 2;
+    param->scale = (param->scale < 1.5) ? 2.0 : param->scale * 2.0;   // base -> 2 -> 4, whatever the base scale
     scale1 = param->scale;
     
     if ((gsize0/scale0) <= (gsize1/scale1)) {
-        param->scale *= 2;
+        param->scale = (param->scale < 1.5) ? 2.0 : param->scale * 2.0;   // base -> 2 -> 4, whatever the base scale
         scale1 = param->scale;
         cout << " Scale = 2 The new grid will be out of box. Therefore, the scale will be set to 4.0 for next focussing run. " << endl;
         if ((gsize0/scale0) <= (gsize1/scale1) || scale1 > 4.0) {
@@ -416,7 +419,7 @@ bool CEnergy::runFocus(shared_ptr<SPrime> param, SGrid<double>& center1)
 void CEnergy::setbase(shared_ptr<SPrime> param, SGrid<double>& center1)
 {
     param->gsize       = 0;
-    param->scale       = 1.0;
+    param->scale       = scale0;
     param->perfil      = 70.0;
     param->bndcon      = 2;
     

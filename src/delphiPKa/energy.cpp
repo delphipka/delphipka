@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: MPI C++ bindings (removed in MPI-3 / Open MPI 5) replaced by the C API. MAXC0 for the base runs.
+
 //
 //  energy.cpp
 //  DelPhiPKA
@@ -44,6 +47,12 @@ void CEnergy :: run()
         PQR_to_DelPhi.resize(newPDB.size() + strHETATM.size());
     }
     
+    if (maxc < delphi::DELPHI_MIN_MAXC || (0.0f < maxc0 && maxc0 < delphi::DELPHI_MIN_MAXC))
+        cerr << " WARNING: single-precision build, MAXC/MAXC0 raised to " << delphi::DELPHI_MIN_MAXC << " (build with EXTRA=-DMX for tighter values)." << endl;
+
+    if (scale0 < 0.5f || scale0 > 1.4f)
+        cerr << " WARNING: SCALE0 = " << scale0 << " is outside the supported range 0.5 - 1.4; the focusing chain (2, then 4) assumes a coarser base." << endl;
+
     float ergpolar_crg, ergpolar_neu;
     float ergg_prot, ergg_wat;
     
@@ -60,7 +69,7 @@ void CEnergy :: run()
     param->exdi        = exdi;
     param->prbrad      = prbrad;
     param->ionrad      = ionrad;
-    param->fMaxc       = maxc;
+    param->fMaxc       = (maxc < delphi::DELPHI_MIN_MAXC) ? delphi::DELPHI_MIN_MAXC : maxc;
     param->salt        = 0.15;
     param->bCommFrc    = true;
     param->bSolvEng    = false;
@@ -122,13 +131,13 @@ void CEnergy :: run()
     
     int N = vecIonRes.size();
     
-    id = MPI::COMM_WORLD.Get_rank();
-    numprocs = MPI::COMM_WORLD.Get_size();
+    id = delphi_mpi_rank();
+    numprocs = delphi_mpi_size();
     
     int rank_size = N / numprocs;
     MPI_START = ( N / numprocs) * id;
     
-    MPI::COMM_WORLD.Barrier();
+    MPI_Barrier(MPI_COMM_WORLD);
     
     double MPI_Timer = MPI_Wtime();
     
@@ -226,9 +235,9 @@ void CEnergy :: run()
             
             setbase(param, center1);
             
-            runDelphi(param);
+            { const float maxcSaved = param->fMaxc; const float baseMaxc = (0.0f < maxc0) ? maxc0 : 10.0f*maxc; param->fMaxc = (baseMaxc < delphi::DELPHI_MIN_MAXC) ? delphi::DELPHI_MIN_MAXC : baseMaxc; runDelphi(param); param->fMaxc = maxcSaved; }
             
-            vecGridPotential = param->vecGridPot;
+            vecGridPotential.assign(param->vecGridPot.begin(), param->vecGridPot.end());
 
             
             
@@ -336,9 +345,9 @@ void CEnergy :: run()
             
             setbase(param, center1);
             
-            runDelphi(param);
+            { const float maxcSaved = param->fMaxc; const float baseMaxc = (0.0f < maxc0) ? maxc0 : 10.0f*maxc; param->fMaxc = (baseMaxc < delphi::DELPHI_MIN_MAXC) ? delphi::DELPHI_MIN_MAXC : baseMaxc; runDelphi(param); param->fMaxc = maxcSaved; }
             
-            vecGridPotential = param->vecGridPot;
+            vecGridPotential.assign(param->vecGridPot.begin(), param->vecGridPot.end());
             
             if ( runFocus(param, center1) )
             {
@@ -416,7 +425,7 @@ void CEnergy :: run()
         
         delphi_progress.close();
         
-        MPI::COMM_WORLD.Barrier();
+        MPI_Barrier(MPI_COMM_WORLD);
         
         if(id==0)	cout << endl;
         
@@ -424,7 +433,7 @@ void CEnergy :: run()
         int rcount[numprocs];
         int displs[numprocs];
         
-        MPI::COMM_WORLD.Gather ( &count, 1, MPI::INT, &rcount[0], 1, MPI::INT, 0 );
+        MPI_Gather(&count, 1, MPI_INT, &rcount[0], 1, MPI_INT, 0, MPI_COMM_WORLD);
         
         if(id==0)
         {
@@ -435,22 +444,22 @@ void CEnergy :: run()
             }
         }
         
-        MPI::COMM_WORLD.Gatherv( &EnergyRxnCrg_partial[0], count, MPI::FLOAT, &EnergyRxnCrg[0], rcount, displs, MPI::FLOAT, 0 );
-        MPI::COMM_WORLD.Gatherv( &EnergyRxnNeu_partial[0], count, MPI::FLOAT, &EnergyRxnNeu[0], rcount, displs, MPI::FLOAT, 0 );
-        MPI::COMM_WORLD.Gatherv( &EnergyPolarCrg_partial[0], count, MPI::FLOAT, &EnergyPolarCrg[0], rcount, displs, MPI::FLOAT, 0 );
-        MPI::COMM_WORLD.Gatherv( &EnergyPolarNeu_partial[0], count, MPI::FLOAT, &EnergyPolarNeu[0], rcount, displs, MPI::FLOAT, 0 );
+        MPI_Gatherv(&EnergyRxnCrg_partial[0], count, MPI_FLOAT, &EnergyRxnCrg[0], rcount, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(&EnergyRxnNeu_partial[0], count, MPI_FLOAT, &EnergyRxnNeu[0], rcount, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(&EnergyPolarCrg_partial[0], count, MPI_FLOAT, &EnergyPolarCrg[0], rcount, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(&EnergyPolarNeu_partial[0], count, MPI_FLOAT, &EnergyPolarNeu[0], rcount, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
         
-        MPI::COMM_WORLD.Bcast( &EnergyPolarCrg[0], N, MPI::FLOAT, 0 );
-        MPI::COMM_WORLD.Bcast( &EnergyPolarNeu[0], N, MPI::FLOAT, 0 );
-        MPI::COMM_WORLD.Bcast( &EnergyRxnCrg[0], N, MPI::FLOAT, 0 );
-        MPI::COMM_WORLD.Bcast( &EnergyRxnNeu[0], N, MPI::FLOAT, 0 );
+        MPI_Bcast(&EnergyPolarCrg[0], N, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&EnergyPolarNeu[0], N, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&EnergyRxnCrg[0], N, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&EnergyRxnNeu[0], N, MPI_FLOAT, 0, MPI_COMM_WORLD);
                               
                               
         int count1 = ( MPI_END - MPI_START ) * N * 4;
         int rcount1[numprocs];
         int displs1[numprocs];
         
-        MPI::COMM_WORLD.Gather ( &count1, 1, MPI::INT, &rcount1[0], 1, MPI::INT, 0 );
+        MPI_Gather(&count1, 1, MPI_INT, &rcount1[0], 1, MPI_INT, 0, MPI_COMM_WORLD);
         
         if(id==0)
         {
@@ -461,9 +470,9 @@ void CEnergy :: run()
             }
         }
         
-        MPI::COMM_WORLD.Gatherv( &globalEnergyVec_partial[0], count1, MPI::FLOAT, &globalEnergyVec[0], rcount1, displs1, MPI::FLOAT, 0 );
+        MPI_Gatherv(&globalEnergyVec_partial[0], count1, MPI_FLOAT, &globalEnergyVec[0], rcount1, displs1, MPI_FLOAT, 0, MPI_COMM_WORLD);
         
-        MPI::COMM_WORLD.Bcast( &globalEnergyVec[0], globalSIZE, MPI::FLOAT, 0 );
+        MPI_Bcast(&globalEnergyVec[0], globalSIZE, MPI_FLOAT, 0, MPI_COMM_WORLD);
         
         
 

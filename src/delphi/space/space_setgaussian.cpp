@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: setGaussian: per-atom cutoff over distance-sorted offsets (cached), OpenMP parallel offset loop. Counting sort of the offsets; fused dielectric passes; one boundary pass.
+
 //Tips for Gaussian:
 //the new statement can be added by modifying following files:
 //
@@ -18,6 +21,8 @@
 #include "../misc/misc_grid.h"
 #include "space_templates.h"
 #include "space.h"
+#include <algorithm>
+#include <numeric>
 
 using namespace std;
 
@@ -34,6 +39,14 @@ void CDelphiSpace::setGaussian()
     SGrid <delphi_real> * rad2aav=rad2aavtemp+150;
     SGrid <delphi_real> * vtemp2=vtemp2temp+150;
     SGrid <delphi_integer>* ioff;
+    // The offsets of ioff sorted by squared distance, so that an atom only walks the offsets that can
+    // touch its own (smaller or equal) cutoff sphere instead of the cube sized for the largest atom.
+    // They only depend on (lim, radtest), and a run uses just a few scales, so they are kept between calls.
+    static vector< SGrid <delphi_integer> > ioffS;
+    static vector<delphi_integer> ioffD2;
+    static delphi_integer ioffLim = -1;
+    static delphi_real    ioffRadtest = -1.0;
+    static int            ioffIbox = -2;
 
     ioff=NULL;
     bool itobig,itest2,ipore,bOnlyMolbDebug;
@@ -191,6 +204,27 @@ void CDelphiSpace::setGaussian()
             }// if
         }// if
         if(debug_space) cout << ibox <<": " << ioff[ibox] << idist << endl;
+
+        if (ioff != NULL && !itobig && ibox >= 0
+            && !(lim == ioffLim && radtest == ioffRadtest && ibox == ioffIbox && (int)ioffS.size() == ibox+1))
+        {
+            ioffLim = lim; ioffRadtest = radtest; ioffIbox = ibox;
+            // stable counting sort by squared distance (the same order stable_sort gave, in O(n))
+            auto d2of = [&](int k) { return ioff[k].nX*ioff[k].nX + ioff[k].nY*ioff[k].nY + ioff[k].nZ*ioff[k].nZ; };
+            int maxD2 = 0;
+            for (int k = 0; k <= ibox; k++) maxD2 = max(maxD2, d2of(k));
+            vector<int> bucket(maxD2 + 2, 0);
+            for (int k = 0; k <= ibox; k++) bucket[d2of(k) + 1]++;
+            for (int d = 0; d <= maxD2; d++) bucket[d + 1] += bucket[d];
+            ioffS.resize(ibox+1);
+            ioffD2.resize(ibox+1);
+            for (int k = 0; k <= ibox; k++)
+            {
+                const int d2 = d2of(k), at = bucket[d2]++;
+                ioffS[at]  = ioff[k];
+                ioffD2[at] = d2;
+            }
+        }
 
 
 
@@ -467,15 +501,22 @@ void CDelphiSpace::setGaussian()
                     //#pragma omp parallel for schedule(static) private(xn,rad,radp,rad2,radp2,itest2,ismin,ismax,itest,rad2a,ixn,fxn,rad2av,vtemp,rad2aavtemp,i123,ixyz,ix,iy,iz,distsq,sqtemp)
                     //#pragma omp parallel for schedule(static) private(xn,rad,radp,rad2,radp2,itest2,ismin,ismax,itest,rad2a,ixn,fxn,rad2av,vtemp,rad2aavtemp,i123,ixyz,ix,iy,iz,distsq,sqtemp) shared(idebmap)
 
+                    // A point can only be updated if (r + e_c/2)^2 < rad2 with r = offset + fxn and
+                    // |fxn| <= sqrt(3)/2 per cell, i.e. |offset| < rad + 1/2 + sqrt(3)/2. Offsets beyond that
+                    // never pass any of the three tests below, so skipping them changes nothing.
+                    const delphi_real rcut  = rad + 0.5 + 0.5*sqrt(3.0) + 1.0e-6;
+                    const int         nUse  = int(upper_bound(ioffD2.begin(), ioffD2.end(), rcut*rcut) - ioffD2.begin());
 #ifdef PARALLEL_OMP
-                    #pragma omp for schedule(auto)
-                    //#pragma omp parallel for schedule(static) private(xn,rad,radp,rad2,radp2,itest2,ismin,ismax,itest,rad2a,ixn,fxn,rad2av,vtemp,rad2aavtemp,i123,ixyz,ix,iy,iz,distsq,sqtemp)
+                    // Every offset in ioff is a distinct grid point, so no two iterations write the same
+                    // gepsmp element and each point still gets its atoms in the same order: bit-identical.
+                    // The loop was an orphaned "omp for" (outside any parallel region), i.e. serial.
+                    #pragma omp parallel for schedule(dynamic, 64) private(i123,ixyz,ix,iy,iz,distsq,distance2,den)
 #endif
 
-                    for(i=0; i<=ibox; i++)
+                    for(i=0; i<nUse; i++)
                     {
 
-                        i123=ioff[i];
+                        i123=ioffS[i];
                         ixyz=ixn+i123;
                         ix=ixyz.nX;
                         iy=ixyz.nY;
@@ -577,162 +618,88 @@ void CDelphiSpace::setGaussian()
 
 
 // cout << << "bDebug: srfcut << inhomo:" << srfcut << inhomo
-    for(ix=1; ix<=iGrid; ix++)
+    // Dielectric map from the density, then the srfcut cap of the inhomogeneous run. The two passes are fused (every point is
+    // independent) and the rows are walked through hoisted pointers: gepsmp[ix][iy] is a pointer to a row, and indexing the three
+    // levels per point made the compiler re-read two pointers each time.
+    if(inhomo==1)
     {
-        for(iy=1; iy<=iGrid; iy++)
-        {
-            for(iz=1; iz<=iGrid; iz++)
-            {
-                gepsmp2[ix][iy][iz].nX=gepsmp[ix][iy][iz].nX*repsin+(1-gepsmp[ix][iy][iz].nX)*repsout;
-                gepsmp2[ix][iy][iz].nY=gepsmp[ix][iy][iz].nY*repsin+(1-gepsmp[ix][iy][iz].nY)*repsout;
-                gepsmp2[ix][iy][iz].nZ=gepsmp[ix][iy][iz].nZ*repsin+(1-gepsmp[ix][iy][iz].nZ)*repsout;
-//################### for set epsout in protein larger than in water:##########
-                if(gepsmp[ix][iy][iz].nX<0.02)
-                {
-                    gepsmp2[ix][iy][iz].nX=80.0;
-                }//if
-                if(gepsmp[ix][iy][iz].nY<0.02)
-                {
-                    gepsmp2[ix][iy][iz].nY=80.0;
-                }//if
-                if(gepsmp[ix][iy][iz].nZ<0.02)
-                {
-                    gepsmp2[ix][iy][iz].nZ=80.0;
-                }//if
-//################### }// for this epsout in protein different than in water######
-            }//do
-        }//do
-    }//do
-
-
-    if(inhomo==1)  //reduce epsilon out side protein;
-    {
-// epstemp=repsin*(1-srfcut)+repsout*srfcut
         epstemp=srfcut;
         if(epstemp<repsin)
         {
             cout << "srfcut is lower than epsin." << endl;
             exit(0);
         }//if
-// print* << "epstemp" << epstemp
-        for(ix=1; ix<=iGrid; ix++)
+    }//if
+    for(ix=1; ix<=iGrid; ix++)
+    {
+        for(iy=1; iy<=iGrid; iy++)
         {
-            for(iy=1; iy<=iGrid; iy++)
+            const SGrid <delphi_real> * grow = gepsmp[ix][iy];
+            SGrid <delphi_real> *       erow = gepsmp2[ix][iy];
+            for(iz=1; iz<=iGrid; iz++)
             {
-                for(iz=1; iz<=iGrid; iz++)
+                erow[iz].nX=grow[iz].nX*repsin+(1-grow[iz].nX)*repsout;
+                erow[iz].nY=grow[iz].nY*repsin+(1-grow[iz].nY)*repsout;
+                erow[iz].nZ=grow[iz].nZ*repsin+(1-grow[iz].nZ)*repsout;
+                if(grow[iz].nX<0.02) erow[iz].nX=80.0;
+                if(grow[iz].nY<0.02) erow[iz].nY=80.0;
+                if(grow[iz].nZ<0.02) erow[iz].nZ=80.0;
+                if(inhomo==1)
                 {
-                    if(gepsmp2[ix][iy][iz].nX>epstemp)
-                    {
-                        gepsmp2[ix][iy][iz].nX=repsin;
-                    }// if
-                    if(gepsmp2[ix][iy][iz].nY>epstemp)
-                    {
-                        gepsmp2[ix][iy][iz].nY=repsin;
-                    }// if
-                    if(gepsmp2[ix][iy][iz].nZ>epstemp)
-                    {
-                        gepsmp2[ix][iy][iz].nZ=repsin;
-                    }// if
-                }//do
+                    if(erow[iz].nX>epstemp) erow[iz].nX=repsin;
+                    if(erow[iz].nY>epstemp) erow[iz].nY=repsin;
+                    if(erow[iz].nZ>epstemp) erow[iz].nZ=repsin;
+                }//if
             }//do
         }//do
-    }//if
+    }//do
 
+    // Boundary points of the dielectric: one pass that marks idebmap and collects the list in grid order (the original ran the
+    // same test twice, once to count and once to fill).
     iBoundNum=0;
     longint=0;
     dentemp=0.1;
-// ifinwater=true
-    //for(i=2; i<=iGrid; i++)
+    vector< SGrid <delphi_integer> > bndyList;
     for(i=2; i<iGrid; i++)
     {
-        //for(j=2; j<=iGrid; j++)
         for(j=2; j<iGrid; j++)
         {
-            //for(k=2; k<=iGrid; k++)
+            const SGrid <delphi_real> * r0 = gepsmp[i][j];      // [i][j][k]
+            const SGrid <delphi_real> * ri = gepsmp[i-1][j];    // [i-1][j][k]
+            const SGrid <delphi_real> * rj = gepsmp[i][j-1];    // [i][j-1][k]
             for(k=2; k<iGrid; k++)
             {
-                if(gepsmp[i][j][k].nX>dentemp||gepsmp[i][j][k].nY>dentemp ||gepsmp[i][j][k].nZ>dentemp||gepsmp[i-1][j][k].nX>dentemp ||gepsmp[i][j-1][k].nY>dentemp||gepsmp[i][j][k-1].nZ>dentemp)
+                if(r0[k].nX>dentemp||r0[k].nY>dentemp||r0[k].nZ>dentemp||ri[k].nX>dentemp||rj[k].nY>dentemp||r0[k-1].nZ>dentemp)
                 {
-
-                    //idebmap[i][j][k]=false; //iGaussian change method of generating bDebMap;
                     idebmap[k][j][i]=false; //iGaussian change method of generating bDebMap;
-
-                    // see if the epslon distribution is flat or not
-                    eps_min=gepsmp[i][j][k].nX;
-                    eps_max=gepsmp[i][j][k].nX;
-
-                    eps_min=min(eps_min,gepsmp[i][j][k].nY);
-                    eps_min=min(eps_min,gepsmp[i][j][k].nZ);
-                    eps_min=min(eps_min,gepsmp[i-1][j][k].nX);
-                    eps_min=min(eps_min,gepsmp[i][j-1][k].nY);
-                    eps_min=min(eps_min,gepsmp[i][j][k-1].nZ);
-
-                    eps_max=max(eps_max,gepsmp[i][j][k].nY);
-                    eps_max=max(eps_max,gepsmp[i][j][k].nZ);
-                    eps_max=max(eps_max,gepsmp[i-1][j][k].nX);
-                    eps_max=max(eps_max,gepsmp[i][j-1][k].nY);
-                    eps_max=max(eps_max,gepsmp[i][j][k-1].nZ);
-
-                    if(eps_max/eps_min > eps_diff) longint=longint+1;
-
-                }//if
-            }//do
-        }//do
-    }//do
-
-    iBoundNum=longint;
-    //allocate(ibgrd[iBoundNum]);
-    if(debug_space) cout << "###### iboundnum: " <<iBoundNum << endl;
-    if(debug_space)cout << "inhomo: " << inhomo << endl;
-    ibgrd_v.assign(iBoundNum, sgrid_temp_int);
-    ibgrd=&ibgrd_v[-1];
-
-    n=0;
-    //for(i=2; i<=iGrid; i++)
-    for(i=2; i<iGrid; i++)
-    {
-        //for(j=2; j<=iGrid; j++)
-        for(j=2; j<iGrid; j++)
-        {
-            //for(k=2; k<=iGrid; k++)
-            for(k=2; k<iGrid; k++)
-            {
-
-                if(gepsmp[i][j][k].nX>dentemp||gepsmp[i][j][k].nY>dentemp ||gepsmp[i][j][k].nZ>dentemp||gepsmp[i-1][j][k].nX>dentemp ||gepsmp[i][j-1][k].nY>dentemp||gepsmp[i][j][k-1].nZ>dentemp)
-
-
-                {
-                    eps_min=gepsmp[i][j][k].nX;
-                    eps_max=gepsmp[i][j][k].nX;
-
-                    eps_min=min(eps_min,gepsmp[i][j][k].nY);
-                    eps_min=min(eps_min,gepsmp[i][j][k].nZ);
-                    eps_min=min(eps_min,gepsmp[i-1][j][k].nX);
-                    eps_min=min(eps_min,gepsmp[i][j-1][k].nY);
-                    eps_min=min(eps_min,gepsmp[i][j][k-1].nZ);
-
-                    eps_max=max(eps_max,gepsmp[i][j][k].nY);
-                    eps_max=max(eps_max,gepsmp[i][j][k].nZ);
-                    eps_max=max(eps_max,gepsmp[i-1][j][k].nX);
-                    eps_max=max(eps_max,gepsmp[i][j-1][k].nY);
-                    eps_max=max(eps_max,gepsmp[i][j][k-1].nZ);
-
+                    eps_min=r0[k].nX;
+                    eps_max=r0[k].nX;
+                    eps_min=min(eps_min,r0[k].nY);
+                    eps_min=min(eps_min,r0[k].nZ);
+                    eps_min=min(eps_min,ri[k].nX);
+                    eps_min=min(eps_min,rj[k].nY);
+                    eps_min=min(eps_min,r0[k-1].nZ);
+                    eps_max=max(eps_max,r0[k].nY);
+                    eps_max=max(eps_max,r0[k].nZ);
+                    eps_max=max(eps_max,ri[k].nX);
+                    eps_max=max(eps_max,rj[k].nY);
+                    eps_max=max(eps_max,r0[k-1].nZ);
                     if(eps_max/eps_min > eps_diff)
                     {
-
-                        n=n+1;
-                        ibgrd[n].nX=i;
-                        ibgrd[n].nY=j;
-                        ibgrd[n].nZ=k;
+                        longint=longint+1;
+                        SGrid <delphi_integer> bp;
+                        bp.nX=i; bp.nY=j; bp.nZ=k;
+                        bndyList.push_back(bp);
                     }
-
                 }//if
             }//do
         }//do
     }//do
-
-// Array deallocation is made by ordinary F95 statement
-    //if(allocated(ioff)) deallocate(ioff);
+    iBoundNum=longint;
+    if(debug_space) cout << "###### iboundnum: " <<iBoundNum << endl;
+    if(debug_space)cout << "inhomo: " << inhomo << endl;
+    ibgrd_v.swap(bndyList);
+    ibgrd=&ibgrd_v[-1];
 
     if (ioff != NULL)
     {

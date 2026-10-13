@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 /**
  * @file misc_timer.h
  * @brief a timer class to print program execution time

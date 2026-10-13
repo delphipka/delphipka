@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: single precision: typed literal in max().
+
 #include "../interface/environment.h"
 #include "../delphi/delphi_constants.h"
 #include "../misc/misc_grid.h"
@@ -137,7 +140,7 @@ void CDelphiSpace::sclbp() // scspos-> scspos; scsnor-> scsnor; iBoundNum-> iBou
     }// if
 
     del=radpmax;
-    del=max(del,1./(2.*fScale));
+    del=max(del,(delphi_real)(1./(2.*fScale)));
     cbln=fRMax+del;
 
     cubedata(2.0,cbln);

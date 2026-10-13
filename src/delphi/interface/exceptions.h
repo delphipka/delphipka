@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 /**
  * @file exceptions.h
  * @brief This file defines the format of warnings and exceptions

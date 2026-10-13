@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: MPI C++ bindings (removed in MPI-3 / Open MPI 5) replaced by the C API. Also SCALE0.
+
 //
 //  readparam.cpp
 //  DelPhiPKA
@@ -13,7 +16,7 @@ void CReadParam :: run()
 {
     
 #ifdef MPI_PARALLEL
-    int id = MPI::COMM_WORLD.Get_rank();
+    int id = delphi_mpi_rank();
 #endif
     
     
@@ -32,7 +35,7 @@ void CReadParam :: run()
             
 #ifdef MPI_PARALLEL
         }
-        MPI::Finalize();
+        MPI_Finalize();
 #endif
         
         exit(0);
@@ -117,6 +120,8 @@ void CReadParam :: run()
                 if(strtmp1 == "Probe radius")                      prbrad  = stof(strtmp2);
                 if(strtmp1 ==
                    "Convergence threshold (MAXC)")                   maxc  = stof(strtmp2);
+                if(strtmp1 == "Convergence threshold, base run (MAXC0)")  maxc0 = stof(strtmp2);
+                if(strtmp1 == "Base grid scale (SCALE0)")                 scale0 = stof(strtmp2);
                 if(strtmp1 ==
                    "Cluster Delimitation Threshold (A)" ) clusterThreshold = stof(strtmp2);
                 if(strtmp1 ==

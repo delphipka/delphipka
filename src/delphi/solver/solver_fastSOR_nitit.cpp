@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: clears bQmapZero (the nonlinear solver fills qmap).
+
 /*
  * solver_fastSOR_nitit.cpp
  *
@@ -9,6 +12,7 @@
 
 void CDelphiFastSOR::nitit(const delphi_real& qfact)
 {
+   bQmapZero = false; // from here on qmap1/2 hold the nonlinear term
    delphi_integer ix,iy,iz;
    vector<delphi_real> rmsl(nxran,0.0),rmaxl(nxran,0.0);
    bool ichangeom,istop,inewfirst,inew;

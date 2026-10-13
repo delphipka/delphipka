@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: reads the new MAXC0 option. Also SCALE0.
+
 //
 //  readparam.h
 //  DelPhiPKA
@@ -52,6 +55,8 @@ private:
     float& ionrad;
     float& prbrad;
     float& maxc;
+    float& maxc0;
+    float& scale0;
     float& clusterThreshold;
     float& fGivenPhVal;
     
@@ -81,6 +86,8 @@ public:
     ionrad(pData->ionrad),
     prbrad(pData->prbrad),
     maxc(pData->maxc),
+    maxc0(pData->maxc0),
+    scale0(pData->scale0),
     clusterThreshold(pData->clusterThreshold),
     fGivenPhVal(pData->fGivenPhVal),
     bHETATMinPQR(pData->bHETATMinPQR),

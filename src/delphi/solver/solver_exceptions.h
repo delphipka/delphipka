@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #ifndef SOLVER_EXCEPTIONS_H_
 #define SOLVER_EXCEPTIONS_H_
 

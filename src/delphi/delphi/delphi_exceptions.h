@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 /**
  * @file delphi_exceptions.h
  * @brief warnings/exceptions occurring in classes CDelphiData and CDelphiDataMarshal

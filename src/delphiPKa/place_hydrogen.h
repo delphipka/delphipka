@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 //
 //  place_hydrogen.h
 //  DelPhiPKA

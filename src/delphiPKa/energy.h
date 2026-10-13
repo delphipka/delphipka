@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: carries the new MAXC0 option. Also SCALE0.
+
 //
 //  energy.h
 //  DelPhiPKA
@@ -36,6 +39,8 @@ private:
     const float& ionrad;
     const float& prbrad;
     const float& maxc;
+    const float& maxc0;
+    const float& scale0;
     
     const int&   iGaussian;
     const float& fSigma;
@@ -169,6 +174,8 @@ public:
     ionrad(pData->ionrad),
     prbrad(pData->prbrad),
     maxc(pData->maxc),
+    maxc0(pData->maxc0),
+    scale0(pData->scale0),
     iGaussian(pData->iGaussian),
     fSigma(pData->fSigma),
     fSrfcut(pData->fSrfcut),

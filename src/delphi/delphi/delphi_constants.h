@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 /**
  * @file delphi_constants.h
  * @brief globally defined constants used for delphicpp

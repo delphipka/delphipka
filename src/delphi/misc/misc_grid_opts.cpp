@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: SGrid operator+ moved to misc_grid.h.
+
 /*
  * misc_grid_opts.cpp
  *
@@ -35,61 +38,7 @@ template <class T> extern ostream& operator<< (ostream& os, SExtrema<T>& data)
    return os;
 }
 
-/*------------------- overload operator + -----------------------*/
-   
-/**
- *  Adds two variables of coord/int_coord derived type
- *
- * \code
- * SGrid <delphi_real>    fVec = fVec1 + fVec2: vplus(a,b);
- * SGrid <delphi_integer> iVec = iVec1 + iVec2: ivplus(a,b)
- * \endcode
- */
-template <class T> SGrid <T> operator+ (const SGrid <T>& nVector1, const SGrid <T>& nVector2)
-{
-   SGrid <T> nVector3;
-      
-   nVector3.nX = nVector1.nX + nVector2.nX;
-   nVector3.nY = nVector1.nY + nVector2.nY;
-   nVector3.nZ = nVector1.nZ + nVector2.nZ;    
-   return nVector3;
-};   
-  
-/**
- * Adds delphi_real/delphi_integer variable to coord/int_coord derived type
- *
- * \code
- * SGrid <delphi_real>    fVec2 = fVec1 + fVal:  vplus2(a,b);
- * SGrid <delphi_integer> iVec2 = iVec1 + iVal: ivplus2(a,b)
- * \endcode
- */
-template <class T> SGrid <T> operator+ (const SGrid <T>& nVector, const T& nValue)
-{
-   SGrid <T> nRtVector;
-      
-   nRtVector.nX = nVector.nX + nValue;
-   nRtVector.nY = nVector.nY + nValue;
-   nRtVector.nZ = nVector.nZ + nValue;    
-   return nRtVector;
-};   
-   
-/**
- * Adds coord/int_coord derived type to delphi_real/delphi_integer variable
- *
- * \code
- * SGrid <delphi_real>    fVec2 = fVal + fVec1:  vplus3(a,b);
- * SGrid <delphi_integer> iVec2 = iVal + iVec1: ivplus3(a,b)
- * \endcode
- */
-template <class T> SGrid <T> operator+ (const T& nValue , const SGrid <T>& nVector)
-{
-   SGrid <T> nRtVector;
-      
-   nRtVector.nX = nValue + nVector.nX;
-   nRtVector.nY = nValue + nVector.nY;
-   nRtVector.nZ = nValue + nVector.nZ;    
-   return nRtVector;
-};   
+/*------------------- overload operator + : defined inline in misc_grid.h -----*/
 
 /*------------------- overload operator - -----------------------*/
    

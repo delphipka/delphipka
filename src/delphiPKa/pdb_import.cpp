@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: MPI C++ bindings (removed in MPI-3 / Open MPI 5) replaced by the C API.
+
 //
 //  pdb_import.cpp
 //  DelPhiPKA
@@ -14,7 +17,7 @@
 void CPdbImport::run() {
 
 #ifdef MPI_PARALLEL
-    id = MPI::COMM_WORLD.Get_rank();
+    id = delphi_mpi_rank();
 #endif
     
     ifstream pdb_sourcefile(pdb_input);
@@ -29,7 +32,7 @@ void CPdbImport::run() {
             
 #ifdef MPI_PARALLEL
         }
-        MPI::Finalize();
+        MPI_Finalize();
 #endif
         
         exit(0);

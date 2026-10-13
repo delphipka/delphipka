@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: MPI C++ bindings (removed in MPI-3 / Open MPI 5) replaced by the C API.
+
 //
 //  place_hydrogen.cpp
 //  DelPhiPKA
@@ -18,7 +21,7 @@ void CPlaceHydrogen :: run()
 {
     
 #ifdef MPI_PARALLEL
-    id = MPI::COMM_WORLD.Get_rank();
+    id = delphi_mpi_rank();
 #endif
     
     newPDB.reserve(9999);
@@ -312,7 +315,7 @@ void CPlaceHydrogen :: run()
 void CPlaceHydrogen::output_newPDB() {
     
 #ifdef MPI_PARALLEL
-    id = MPI::COMM_WORLD.Get_rank();
+    id = delphi_mpi_rank();
 #endif
 
         ofstream output_PDB;

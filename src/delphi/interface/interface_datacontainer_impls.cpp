@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 /**
  * @file interface_datacontainer_impls.h
  * @brief concrete implementations of template member functions in IDataContainer

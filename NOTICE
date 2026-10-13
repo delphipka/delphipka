@@ -1,0 +1,44 @@
+DelPhiPKa - nucleic-acid evaluation branch
+==========================================
+
+Original work
+-------------
+DelPhiPKa (c) 2014 Lin Wang, Computational Biophysics and Bioinformatics,
+Prof. Emil Alexov group, Clemson University.
+  src/delphiPKa/   - Lin Wang
+  src/delphi/      - DelPhi C++ (Chuan Li and colleagues, Clemson University)
+This is the 2016 original (master); the original copyright headers in every source file are retained unchanged.
+The original repository contains no licence file, and the original copyright headers
+state "All rights reserved".
+
+The LICENSE file in this repository (GNU LGPL-3.0) is a PLACEHOLDER only. It is NOT
+legally binding: the original authors (Lin Wang, the Alexov group and the DelPhi
+authors) have not authorized any licence for their code, so no one, including the
+author of this fork, can grant LGPL-3.0 terms over it. Until the original authors
+give written permission, treat the code as all rights reserved: do not redistribute
+it or ship it as part of another package under that licence.
+
+If this work contributes to a publication, cite the references requested in
+README.md:
+  Wang L, Li L, Alexov E. Proteins 83(12):2186-2197 (2015), doi:10.1002/prot.24935
+  Wang L, Zhang M, Alexov E. Bioinformatics (2015), doi:10.1093/bioinformatics/btv607
+
+Third-party parameter files (param/, unchanged from the original)
+-----------------------------------------------------------------
+  amber.crg / amber.siz  - created from amber98.prm, TINKER package (per file headers)
+  charmm22.crg / .siz    - charmm22, modified from Honig's files (per file headers)
+  parseres.crg / .siz    - PARSE, files by "dfs" 2/3/93, mod. 7/94 (per headers); cf. Sitkoff et al. 1994, doi:10.1021/j100058a043
+  gromos.crg / .siz      - GROMOS (no provenance in file headers)
+  topology               - Lin Wang / Alexov group
+
+Modifications on branch nucleic-acids
+-------------------------------------
+Evaluation of DNA/RNA pKa and protonation support, by noshou (git user of this
+repository). Every added parameter value is recorded with its source in
+SOURCES.md. Modified files carry a note naming this branch and its author next to
+the original header.
+
+Performance and solver changes on this branch: the SOR relaxation factor is computed from the grid, a quadratic
+vector insert and the MPI C++ bindings were replaced, the dielectric maps are reused between the two states of a
+titratable site, the Poisson-Boltzmann solves can run on OpenMP threads, on a GPU (OpenCL) and, per MPI rank, with several SOR half sweeps per pass over the grid (scripts/run_parallel.py), and the titration step looks up its pair energies once per cluster instead of once per state. Each modified
+source file starts with a note saying what changed in it.

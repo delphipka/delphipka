@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: MPI C++ bindings (removed in MPI-3 / Open MPI 5) replaced by the C API; titration: per-cluster lookups hoisted out of the state loop.
+
 //
 //  titration2.cpp
 //  DelPhiPKA
@@ -9,6 +12,7 @@
 #include "titration2.h"
 #include <iomanip>
 #include <fstream>
+#include <map>
 #include <unordered_set>
 
 void CTitration2 :: run()
@@ -35,7 +39,7 @@ void CTitration2 :: run()
     vector<vector<bool> > vecBool2d;
 
 #ifdef MPI_PARALLEL
-    int id = MPI::COMM_WORLD.Get_rank();  // MPI rank
+    int id = delphi_mpi_rank();  // MPI rank
     
     if(id==0) {
         
@@ -119,12 +123,12 @@ void CTitration2 :: run()
     
     int N = vecCluster1.size();
     
-    int numprocs = MPI::COMM_WORLD.Get_size();
+    int numprocs = delphi_mpi_size();
     int MPI_START, MPI_END;
     int rank_size = N / numprocs;
     MPI_START = ( N / numprocs) * id;
     
-    MPI::COMM_WORLD.Barrier();
+    MPI_Barrier(MPI_COMM_WORLD);
     
     
     float vecProbMPI[N];
@@ -169,90 +173,119 @@ void CTitration2 :: run()
             n = vecCluster1[i].size();
 
             vecProb.resize(n);
-            genState(n);
 
+            // The 2^n states of a cluster of n residues depend on n only: build them once per n
+            static map<int, vector<vector<int> > > stateCache;
+            vector<vector<int> > bigStates;   // clusters above 16 residues are not kept between calls
+            const vector<vector<int> >* statesPtr;
+            if (n <= 16) {
+                map<int, vector<vector<int> > >::iterator cached = stateCache.find(n);
+                if (cached == stateCache.end()) {
+                    vecState.clear();
+                    genState(n);
+                    cached = stateCache.insert(make_pair(n, vecState)).first;
+                    vecState.clear();
+                }
+                statesPtr = &cached->second;
+            }
+            else {
+                vecState.clear();
+                genState(n);
+                bigStates.swap(vecState);
+                statesPtr = &bigStates;
+            }
+            const vector<vector<int> >& states = *statesPtr;
 
-            vecExpN.resize(vecState.size());
+            vecExpN.resize(states.size());
 
+            // Everything below that does not depend on the state of the cluster is worked out once per cluster and pH
+            // instead of once per state (the position of a residue in the cluster, the reference pKa lookups, the
+            // reference energies); the sums are then taken in the same order as before, so the numbers are unchanged.
+            vector<float> e0(n);
+            for (k=0; k<n; k++) e0[k] = genEnergy0(vecCluster1[i][k], fPH);
 
+            struct PairLookup { int a1, p1, a2, p2; };   // table row = a + (state == 1 ? 0 : 1) for a residue inside the cluster (p >= 0)
+            vector<PairLookup> lookup(vecPair[i].size());
+            for (k=0; k<(int)vecPair[i].size(); k++) {
 
-            for (j=0; j<vecState.size(); j++) {
-                
+                pos = find(vecCluster1[i].begin(), vecCluster1[i].end(), vecPair[i][k].res1) - vecCluster1[i].begin();
+                lookup[k].a1 = vecPair[i][k].res1 * 2;
+                lookup[k].p1 = (pos != (int)vecCluster1[i].size()) ? pos : -1;
+
+                pos = find(vecCluster1[i].begin(), vecCluster1[i].end(), vecPair[i][k].res2) - vecCluster1[i].begin();
+                if (pos != (int)vecCluster1[i].size()) {
+                    lookup[k].a2 = vecPair[i][k].res2 * 2;
+                    lookup[k].p2 = pos;
+                }
+                else {
+                    lookup[k].p2 = -1;
+                    if(vecBool2d[vecPair[i][k].res2][iCounter]
+                       && vec2dProb[vecPair[i][k].res2][iCounter]>0.5) { m2 = vecPair[i][k].res2 * 2; }
+
+                    else {
+
+                        string resnam = newPDB[vecIonRes[vecPair[i][k].res2][0]].res_name;
+
+                        float pkaref = pkamap.find(resnam)->second;
+
+                        if(resnam == "GLU" || resnam == "ASP")  bAcid = true; else    bAcid = false;
+
+                        if(bAcid) {
+                            if(fPH <  pkaref)  { m2 = vecPair[i][k].res2 * 2 + 1 ;}
+                            if(fPH >= pkaref)  { m2 = vecPair[i][k].res2 * 2     ;}
+                        }
+
+                        if(!bAcid) {
+                            if(fPH <  pkaref)  { m2 = vecPair[i][k].res2 * 2     ;}
+                            if(fPH >= pkaref)  { m2 = vecPair[i][k].res2 * 2 + 1 ;}
+                        }
+                    }
+                    lookup[k].a2 = m2;
+                }
+            }
+
+            for (j=0; j<(int)states.size(); j++) {
+
                 ergrxn = 0.0; ergpolar = 0.0; erg0 = 0.0;
 
-                for (k=0; k<vecState[j].size(); k++) {
-                    
-                    if(1 == vecState[j][k]) {
+                for (k=0; k<n; k++) {
+
+                    if(1 == states[j][k]) {
                         m1 = vecCluster1[i][k];
                         ergpolar += EnergyPolarCrg[m1];
                         ergrxn   += EnergyRxnCrg[m1];
-                        erg0     += genEnergy0(vecCluster1[i][k], fPH);
+                        erg0     += e0[k];
                     }
-                    
-                    if(0 == vecState[j][k]) {
+
+                    if(0 == states[j][k]) {
                         m1 = vecCluster1[i][k];
                         ergpolar += EnergyPolarNeu[m1];
                         ergrxn   += EnergyRxnNeu[m1];
                         erg0     += 0;
                     }
-                    
+
                 }
-                
+
                 ergpair = 0.0;
 
-                for (k=0; k<vecPair[i].size(); k++) {
-                    
-                    pos = find(vecCluster1[i].begin(), vecCluster1[i].end(), vecPair[i][k].res1) - vecCluster1[i].begin();
-                    if(pos != vecCluster1[i].size()) { // Found.
-                        if(1 == vecState[j][pos]) { m1 = vecPair[i][k].res1 * 2;     }
-                        if(0 == vecState[j][pos]) { m1 = vecPair[i][k].res1 * 2 + 1 ;}
-                    }
-                    else { m1 = vecPair[i][k].res1 * 2;}
-                    
-                    
-                    pos = find(vecCluster1[i].begin(), vecCluster1[i].end(), vecPair[i][k].res2) - vecCluster1[i].begin();
-                    
-                    if(pos != vecCluster1[i].size()) { // Found.
-                        
-                        if(1 == vecState[j][pos]) { m2 = vecPair[i][k].res2 * 2     ;}
-                        if(0 == vecState[j][pos]) { m2 = vecPair[i][k].res2 * 2 + 1 ;}
-                    }
-                    else {
-                        if(vecBool2d[vecPair[i][k].res2][iCounter]
-                           && vec2dProb[vecPair[i][k].res2][iCounter]>0.5) { m2 = vecPair[i][k].res2 * 2; }
-                        
-                        else {
-                            
-                            string resnam = newPDB[vecIonRes[vecPair[i][k].res2][0]].res_name;
-                            
-                            float pkaref = pkamap.find(resnam)->second;
-                            
-                            if(resnam == "GLU" || resnam == "ASP")  bAcid = true; else    bAcid = false;
-                            
-                            if(bAcid) {
-                                if(fPH <  pkaref)  { m2 = vecPair[i][k].res2 * 2 + 1 ;}
-                                if(fPH >= pkaref)  { m2 = vecPair[i][k].res2 * 2     ;}
-                            }
-                            
-                            if(!bAcid) {
-                                if(fPH <  pkaref)  { m2 = vecPair[i][k].res2 * 2     ;}
-                                if(fPH >= pkaref)  { m2 = vecPair[i][k].res2 * 2 + 1 ;}
-                            }
-                        }
-                    }
-                    
-                    //                cout << right << setw(8) << fixed << setprecision(4) << EnergyPair[m1][m2].fEnergy << "   ";
-                    
+                for (k=0; k<(int)lookup.size(); k++) {
+
+                    m1 = lookup[k].a1;
+                    if(lookup[k].p1 >= 0) { if(0 == states[j][lookup[k].p1]) m1 += 1; }
+
+                    m2 = lookup[k].a2;
+                    if(lookup[k].p2 >= 0) { if(0 == states[j][lookup[k].p2]) m2 += 1; }
+
                     ergpair += EnergyPair[m1][m2].fEnergy;
-                    
+
                 }
-            
+
                 ergtotal = ( erg0 + ergrxn + ergpolar + ergpair );
 
                 expn = exp( - ergtotal * KCAL2KT );
-                
+
                 vecExpN[j] = expn;
-                
+
             }
 
             fTotalExpN = 0.0;
@@ -263,8 +296,8 @@ void CTitration2 :: run()
             
             fProb = 0.0;
             
-            for (j=0; j<vecState.size(); j++) {
-                if(1 == vecState[j][0]) {
+            for (j=0; j<(int)states.size(); j++) {
+                if(1 == states[j][0]) {
                     fProb += vecExpN[j];
                 }
             }
@@ -286,13 +319,13 @@ void CTitration2 :: run()
 
 #ifdef MPI_PARALLEL
             
-        MPI::COMM_WORLD.Barrier();
+        MPI_Barrier(MPI_COMM_WORLD);
         
         int count = MPI_END - MPI_START;
         int rcount[numprocs];
         int displs[numprocs];
         
-        MPI::COMM_WORLD.Gather ( &count, 1, MPI::INT, &rcount[0], 1, MPI::INT, 0 );
+        MPI_Gather(&count, 1, MPI_INT, &rcount[0], 1, MPI_INT, 0, MPI_COMM_WORLD);
         
         if(id==0)
         {
@@ -303,9 +336,9 @@ void CTitration2 :: run()
             }
         }
         
-        MPI::COMM_WORLD.Gatherv( &vecProbMPI_partial[0], count, MPI::FLOAT, &vecProbMPI[0], rcount, displs, MPI::FLOAT, 0 );
+        MPI_Gatherv(&vecProbMPI_partial[0], count, MPI_FLOAT, &vecProbMPI[0], rcount, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
         
-        MPI::COMM_WORLD.Gatherv( &vecBoolMPI_partial[0], count, MPI::BOOL,  &vecBoolMPI[0], rcount, displs, MPI::BOOL,  0 );
+        MPI_Gatherv(&vecBoolMPI_partial[0], count, MPI_C_BOOL,  &vecBoolMPI[0], rcount, displs, MPI_C_BOOL,  0, MPI_COMM_WORLD);
     
    
         if(id==0) {

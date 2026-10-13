@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: SGrid operator+ defined inline so every file can inline it.
+
 /**
  * @file misc_grid.h
  * @brief grid data types and associated operations
@@ -65,9 +68,31 @@ template <class T> extern ostream& operator<<(ostream &, SExtrema<T> &);
 /*
  * overload operator +
  */
-template <class T> extern SGrid <T> operator+(const SGrid <T> &, const SGrid <T> &);
-template <class T> extern SGrid <T> operator+(const SGrid <T> &, const T &);
-template <class T> extern SGrid <T> operator+(const T &, const SGrid <T> &);
+// Defined here, not in misc_grid_opts.cpp, so that every file can inline them (they run billions of times).
+template <class T> inline SGrid <T> operator+(const SGrid <T> & nVector1, const SGrid <T> & nVector2)
+{
+   SGrid <T> nVector3;
+   nVector3.nX = nVector1.nX + nVector2.nX;
+   nVector3.nY = nVector1.nY + nVector2.nY;
+   nVector3.nZ = nVector1.nZ + nVector2.nZ;
+   return nVector3;
+}
+template <class T> inline SGrid <T> operator+(const SGrid <T> & nVector, const T & nValue)
+{
+   SGrid <T> nRtVector;
+   nRtVector.nX = nVector.nX + nValue;
+   nRtVector.nY = nVector.nY + nValue;
+   nRtVector.nZ = nVector.nZ + nValue;
+   return nRtVector;
+}
+template <class T> inline SGrid <T> operator+(const T & nValue, const SGrid <T> & nVector)
+{
+   SGrid <T> nRtVector;
+   nRtVector.nX = nValue + nVector.nX;
+   nRtVector.nY = nValue + nVector.nY;
+   nRtVector.nZ = nValue + nVector.nZ;
+   return nRtVector;
+}
 
 /*
  * overload operator -
@@ -222,5 +247,27 @@ template <class T> extern bool operator!=(const SGrid <T> &, const T &);
 template <class T> extern bool operator!=(const SGrid <T> &, const SGrid <T> &);
     
 
+
+#ifdef SP
+/*
+ * Single-precision build (delphi_real = float): the code mixes SGrid<float> with double literals and variables
+ * (2.0*v, v+0.5, v/2., ...). These exact-match overloads convert the double to float so that such expressions compile
+ * unchanged. They are not templates, so they win over the generic templates above and cannot be ambiguous.
+ */
+inline SGrid<float> operator+(const SGrid<float>& g, double v) { SGrid<float> r; r.nX = g.nX + (float)v; r.nY = g.nY + (float)v; r.nZ = g.nZ + (float)v; return r; }
+inline SGrid<float> operator+(double v, const SGrid<float>& g) { return g + v; }
+inline SGrid<float> operator-(const SGrid<float>& g, double v) { SGrid<float> r; r.nX = g.nX - (float)v; r.nY = g.nY - (float)v; r.nZ = g.nZ - (float)v; return r; }
+inline SGrid<float> operator*(const SGrid<float>& g, double v) { SGrid<float> r; r.nX = g.nX * (float)v; r.nY = g.nY * (float)v; r.nZ = g.nZ * (float)v; return r; }
+inline SGrid<float> operator*(double v, const SGrid<float>& g) { return g * v; }
+inline SGrid<float> operator/(const SGrid<float>& g, double v) { SGrid<float> r; r.nX = g.nX / (float)v; r.nY = g.nY / (float)v; r.nZ = g.nZ / (float)v; return r; }
+inline bool optORLT (const SGrid<float>& g, double v) { return optORLT (g, (float)v); }
+inline bool optORGT (const SGrid<float>& g, double v) { return optORGT (g, (float)v); }
+inline bool optORLE (const SGrid<float>& g, double v) { return optORLE (g, (float)v); }
+inline bool optORGE (const SGrid<float>& g, double v) { return optORGE (g, (float)v); }
+inline bool optANDLT(const SGrid<float>& g, double v) { return optANDLT(g, (float)v); }
+inline bool optANDGT(const SGrid<float>& g, double v) { return optANDGT(g, (float)v); }
+inline bool optANDLE(const SGrid<float>& g, double v) { return optANDLE(g, (float)v); }
+inline bool optANDGE(const SGrid<float>& g, double v) { return optANDGE(g, (float)v); }
+#endif
 #endif // GRID_H_
 

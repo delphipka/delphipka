@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: thread count follows OMP_NUM_THREADS. Linear PB: the all-zero qmap is not streamed.
+
 /*
  * solver_fastSOR_itrEvenPoints.cpp
  *
@@ -26,7 +29,7 @@ void CDelphiFastSOR::itrEvenPoints(const int& forWhom, const int& flag)
     * set number of threads = number of processors
     */
    //omp_set_num_threads(2);
-   omp_set_num_threads(omp_get_num_procs());
+   omp_set_num_threads(omp_get_max_threads()); // honours OMP_NUM_THREADS (default: all processors)
 
    #pragma omp parallel default(shared) private(omp_thread_id,n,ix,iy,star,fin,temp1,temp2,temp3)
    {
@@ -45,6 +48,25 @@ void CDelphiFastSOR::itrEvenPoints(const int& forWhom, const int& flag)
        */
       if (fZero < abs(fIonStrength))  //----- the main loop is as below:
       {
+         if (bQmapZero) //----- linear PB: qmap is all zero, so do not stream it (adding +0.0 is exact)
+         {
+#ifdef PARALLEL_OMP
+         #pragma omp for schedule(auto)
+#endif
+         for (n = 1; n < iGrid-1; n++)
+         {
+            star = sta2[n]; fin = fi2[n];
+            for (ix = star; ix <= fin; ix++)
+            {
+               temp1 = phimap1[ix-1]         + phimap1[(ix-1)+1];
+               temp2 = phimap1[(ix-1)+lat2]  + phimap1[(ix-1)-lat1];
+               temp3 = phimap1[(ix-1)+long2] + phimap1[(ix-1)-long1];
+               phimap2[ix-1] = phimap2[ix-1]*om1 + (temp1+temp2+temp3)*prgfSaltMap2[ix-1];
+            }
+         }
+         }
+         else
+         {
 #ifdef PARALLEL_OMP
          #pragma omp for schedule(auto)
 #endif
@@ -58,6 +80,7 @@ void CDelphiFastSOR::itrEvenPoints(const int& forWhom, const int& flag)
                temp3 = phimap1[(ix-1)+long2] + phimap1[(ix-1)-long1];
                phimap2[ix-1] = phimap2[ix-1]*om1 + (qmap2[ix-1]+temp1+temp2+temp3)*prgfSaltMap2[ix-1];
             }
+         }
          }
       }
       else //----- if there is no salt then the main loop is executed without sf saving about 15% in execution time

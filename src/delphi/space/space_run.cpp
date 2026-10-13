@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: the flat gepsmp copy is only made for the second Gaussian run; row-wise flatten of gepsmp2.
+
 /*
  * Space_Run.cpp
  *
@@ -311,7 +314,7 @@ void CDelphiSpace::run()
     }
     else
     {
-        fGepsMap_v.assign(iGrid*iGrid*iGrid, sgrid_temp_real);
+        if (logs) fGepsMap_v.assign(iGrid*iGrid*iGrid, sgrid_temp_real);   // only the second Gaussian run (logs) reads it back
         fGepsMap2_v.assign(iGrid*iGrid*iGrid, sgrid_temp_real);
     }
 
@@ -337,10 +340,14 @@ void CDelphiSpace::run()
             //for(i=1;i<=iGrid;i++){
             for(j=1; j<=iGrid; j++)
             {
-                for(k=1; k<=iGrid; k++)
+                SGrid <delphi_real> *       dst2 = &fGepsMap2_v[(i-1)*iGrid*iGrid+(j-1)*iGrid];
+                const SGrid <delphi_real> * src2 = gepsmp2[i][j];
+                for(k=1; k<=iGrid; k++) dst2[k-1]=src2[k];
+                if (logs)
                 {
-                    fGepsMap2_v[(i-1)*iGrid*iGrid+(j-1)*iGrid+k-1]=gepsmp2[i][j][k];
-                    fGepsMap_v[(i-1)*iGrid*iGrid+(j-1)*iGrid+k-1]=gepsmp[i][j][k];
+                    SGrid <delphi_real> *       dst1 = &fGepsMap_v[(i-1)*iGrid*iGrid+(j-1)*iGrid];
+                    const SGrid <delphi_real> * src1 = gepsmp[i][j];
+                    for(k=1; k<=iGrid; k++) dst1[k-1]=src1[k];
                 }
             }
         }

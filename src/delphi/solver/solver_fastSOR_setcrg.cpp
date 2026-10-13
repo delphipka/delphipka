@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 /**
  * \return:
  *    delphi_integer                  iCrgedGridEven    icount1a         number of charged grid points in odd/even arries, to be used in making qval and iqpos

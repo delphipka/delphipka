@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Modified on branch nucleic-acids by noshou: no longer forces the SOR relaxation factor to 0.8.
+
 /**
  * @file delphi_data.h
  * @brief class CDelphiData
@@ -172,8 +175,8 @@ class CDelphiData:virtual public IDataContainer
          // equivalent to energy(g,s) in the parameter file
          pddm->bGridEng = true; pddm->bSolvEng = true;
 
-         // equivalent to relaxationfactor=0.8 in the parameter file
-         pddm->bSpectralRadius = true; pddm->fSpectralRadius = 0.8;
+         // the SOR relaxation factor is computed from the grid (see calculateRelaxFactor); a fixed 0.8 under-relaxed it
+         pddm->bSpectralRadius = false;
 
          pddm->updateParameters();
 
@@ -276,8 +279,8 @@ class CDelphiData:virtual public IDataContainer
         // equivalent to energy(g,s,c) in the parameter file
         pddm->bGridEng = true; pddm->bSolvEng = prime_data->bSolvEng; pddm->bCoulombEng = false;
         
-        // equivalent to relaxationfactor=0.8 in the parameter file
-        pddm->bSpectralRadius = true; pddm->fSpectralRadius = 0.8;
+        // the SOR relaxation factor is computed from the grid (see calculateRelaxFactor); a fixed 0.8 under-relaxed it
+        pddm->bSpectralRadius = false;
         
         pddm->strCommPDB     = prime_data->vecStrPDB;
         pddm->bPDB2FRCInSite = false;  //prime_data->bFrcPDBitself;
